@@ -82,7 +82,7 @@ void session::on_read(Scheduler &s, boost::system::error_code ec,
     ws_.async_write(
         boost::asio::buffer(ret_json),
         boost::asio::bind_executor(
-            strand_, std::bind(&session::on_write, shared_from_this(), std::placeholders::_1, std::placeholders::_2)));
+            strand_, std::bind(&session::on_write, shared_from_this(), s, std::placeholders::_1, std::placeholders::_2)));
 }
 
 void session::on_write(Scheduler &s, boost::system::error_code ec,

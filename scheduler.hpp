@@ -22,7 +22,6 @@ class Scheduler {
 
     std::map<int, Workload> map_id_workload_;
     // The actual container of these;
-    std::mutex queue_lock_;
 
     int queue_full_limit_;
     int largest_timeout_;
