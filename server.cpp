@@ -25,14 +25,14 @@
 using tcp = boost::asio::ip::tcp; // from <boost/asio/ip/tcp.hpp>
 namespace websocket = boost::beast::websocket; // from <boost/beast/websocket.hpp>
 
-void session::run(Scheduler &s)
+void session::run(std::shared_ptr<Scheduler> s)
 {
     // Accept the websocket handshake
     ws_.async_accept(boost::asio::bind_executor(
         strand_, std::bind(&session::on_accept, shared_from_this(), s, std::placeholders::_1)));
 }
 
-void session::on_accept(Scheduler &s, boost::system::error_code ec)
+void session::on_accept(std::shared_ptr<Scheduler> s, boost::system::error_code ec)
 {
     if (ec)
         return fail(ec, "accept");
@@ -41,7 +41,7 @@ void session::on_accept(Scheduler &s, boost::system::error_code ec)
     do_read(s);
 }
 
-void session::do_read(Scheduler &s)
+void session::do_read(std::shared_ptr<Scheduler> s)
 {
     // Read a message into our buffer
     ws_.async_read(
@@ -50,7 +50,7 @@ void session::do_read(Scheduler &s)
             strand_, std::bind(&session::on_read, shared_from_this(), s, std::placeholders::_1, std::placeholders::_2)));
 }
 
-void session::on_read(Scheduler &s, boost::system::error_code ec,
+void session::on_read(std::shared_ptr<Scheduler> s, boost::system::error_code ec,
     std::size_t bytes_transferred)
 {
     boost::ignore_unused(bytes_transferred);
@@ -64,10 +64,15 @@ void session::on_read(Scheduler &s, boost::system::error_code ec,
 
     std::stringstream ss;
     ss << boost::beast::buffers(read_buffer_.data());
-    Workload wl{wl_count};
+    Workload wl{wl_count++};
     wl.parse(ss.str());
-    s.async_insert_workload(std::move(wl));
+    auto f = std::async(std::launch::async, [s, &wl] {
+        s->async_insert_workload(std::move(wl));
+    });
     
+    //s->join();
+
+
     // {
     //     const std::lock_guard<std::mutex> lock(printlock);
     //     std::cout << boost::beast::buffers(read_buffer_.data()) << std::endl;
@@ -85,7 +90,7 @@ void session::on_read(Scheduler &s, boost::system::error_code ec,
             strand_, std::bind(&session::on_write, shared_from_this(), s, std::placeholders::_1, std::placeholders::_2)));
 }
 
-void session::on_write(Scheduler &s, boost::system::error_code ec,
+void session::on_write(std::shared_ptr<Scheduler> s, boost::system::error_code ec,
     std::size_t bytes_transferred)
 {
     boost::ignore_unused(bytes_transferred);
@@ -143,19 +148,29 @@ int main(int argc, char* argv[])
     auto const threads = std::max<int>(1, std::atoi(argv[3]));
 
 
-    Scheduler s;
+  
     // The io_context is required for all I/O
     boost::asio::io_context ioc { threads };
+    boost::asio::io_context sched_ioc { 2 }; 
 
+    std::shared_ptr<Scheduler> s { std::make_shared<Scheduler>(sched_ioc) };
     // Create and launch a listening port
-    std::make_shared<listener>(ioc, tcp::endpoint { address, port })->run();
-
+    std::make_shared<listener>(ioc, s, tcp::endpoint { address, port })->run();
+    
     // Run the I/O service on the requested number of threads
+    std::vector<std::thread> sched_threads;
+    
+    sched_threads.reserve(2);
+    sched_threads.emplace_back([&sched_ioc] { sched_ioc.run(); });
+    sched_threads.emplace_back([&sched_ioc] { sched_ioc.run(); });
+
     std::vector<std::thread> v;
     v.reserve(threads - 1);
     for (auto i = threads - 1; i > 0; --i)
         v.emplace_back([&ioc] { ioc.run(); });
     ioc.run();
+
+  
 
     return EXIT_SUCCESS;
 }

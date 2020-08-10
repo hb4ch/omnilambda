@@ -50,15 +50,15 @@ public:
     }
 
     // Start the asynchronous operation
-    void run(Scheduler &s);
-    void on_accept(Scheduler &s, boost::system::error_code ec);
-    void do_read(Scheduler &s);
+    void run(std::shared_ptr<Scheduler> s);
+    void on_accept(std::shared_ptr<Scheduler> s, boost::system::error_code ec);
+    void do_read(std::shared_ptr<Scheduler> s);
     void on_read(
-        Scheduler &s,
+        std::shared_ptr<Scheduler> s,
         boost::system::error_code ec,
         std::size_t bytes_transferred);
     void on_write(
-        Scheduler &s,
+        std::shared_ptr<Scheduler> s,
         boost::system::error_code ec,
         std::size_t bytes_transferred);
 };
@@ -70,13 +70,15 @@ class listener : public std::enable_shared_from_this<listener> {
     tcp::acceptor acceptor_;
     tcp::socket socket_;
 
-    Scheduler s_;
+    std::shared_ptr<Scheduler> s_;
 public:
     listener(
         boost::asio::io_context& ioc,
+        std::shared_ptr<Scheduler> s,
         tcp::endpoint endpoint)
         : acceptor_(ioc)
         , socket_(ioc)
+        , s_(s)
     {
         boost::system::error_code ec;
 

@@ -41,9 +41,9 @@ public:
     void parse(const std::string & json_str);
     void run();
 
-    virtual ~Workload() {
-        free(return_buf_);
-    }
+    // virtual ~Workload() {
+    //     free(return_buf_);
+    // }
 
 private:
 //---------------------------------------------------
