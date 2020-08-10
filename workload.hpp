@@ -11,14 +11,15 @@
 #include <boost/beast/core.hpp>
 #include <boost/beast/websocket.hpp>
 // boost
+enum class Type {
+    INT32, INT64, FLOAT32, FLOAT64
+};
 
 struct Data {
     void * buffer;
     int dim_x; 
     int dim_y;
-    enum class Type {
-        INT32, INT64, FLOAT32, FLOAT64
-    };
+    
     Type type;
 };
 

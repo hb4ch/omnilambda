@@ -67,13 +67,13 @@ void Workload::parse(const std::string & json_str)
 
            
             if (type == "int")
-                data.type = Data::Type::INT32;
+                data.type = Type::INT32;
             else if (type == "long")
-                data.type = Data::Type::INT64;
+                data.type = Type::INT64;
             else if (type == "double")
-                data.type = Data::Type::FLOAT64;
+                data.type = Type::FLOAT64;
             else if (type == "float")
-                data.type = Data::Type::FLOAT32;
+                data.type = Type::FLOAT32;
             else
                 throw std::runtime_error("Unknown type of data array.");
 
@@ -81,13 +81,13 @@ void Workload::parse(const std::string & json_str)
             data.dim_y = d[v.c_str()]["dim_y"].GetUint64();
             size_t buffer_size = (size_t)data.dim_x  * (size_t)data.dim_y;
 
-            if (data.type == Data::Type::INT32)
+            if (data.type == Type::INT32)
                 buffer_size *= sizeof(int);
-            else if (data.type == Data::Type::INT64)
+            else if (data.type == Type::INT64)
                 buffer_size *= sizeof(long);
-            else if (data.type == Data::Type::FLOAT64)
+            else if (data.type == Type::FLOAT64)
                 buffer_size *= sizeof(double);
-            else if (data.type == Data::Type::FLOAT32)
+            else if (data.type == Type::FLOAT32)
                 buffer_size *= sizeof(float);
 
             data.buffer = (void*)malloc(buffer_size + 32);
@@ -97,16 +97,16 @@ void Workload::parse(const std::string & json_str)
             const rapidjson::Value & a = d[v.c_str()]["data"];
             assert(a.IsArray());
             for (rapidjson::SizeType i = 0; i < a.Size(); i++) {
-                if (data.type == Data::Type::INT32) {
+                if (data.type == Type::INT32) {
                     *((int*)data_p) = a[i].GetInt();
                     data_p = (int*)data_p + 1;
-                } else if (data.type == Data::Type::INT64) {
+                } else if (data.type == Type::INT64) {
                     *((int*)data_p) = a[i].GetInt64();
                     data_p = (long*)data_p + 1;
-                } else if (data.type == Data::Type::FLOAT32) {
+                } else if (data.type == Type::FLOAT32) {
                     *((int*)data_p) = a[i].GetDouble();
                     data_p = (double*)data_p + 1;
-                } else if (data.type == Data::Type::FLOAT64) {
+                } else if (data.type == Type::FLOAT64) {
                     *((int*)data_p) = a[i].GetDouble();
                     data_p = (float*)data_p + 1;
                 }
