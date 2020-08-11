@@ -16,19 +16,20 @@ enum class Type {
 };
 
 struct Data {
+    std::string name;
     void * buffer;
     int dim_x; 
     int dim_y;
-    
+    size_t size;
     Type type;
 };
 
 class Workload {
 public:
-    Workload(uint64_t id) 
-        :id_(id)
+    Workload() 
+        :id_(this->global_count)
     {
-        
+        this->global_count++;   
     }
     Workload(const Workload & awl) = default;
     Workload(Workload && awl) = default;
@@ -39,22 +40,20 @@ public:
     uint64_t getid() const {
         return id_;
     }
+    std::pair<int, int> get_conf() {
+        return {block_per_grid_, threads_per_block_};
+    }
     void parse(const std::string & json_str);
+    void output();
     void run();
+    void free();
 
-    // virtual ~Workload() {
-    //     free(return_buf_);
-    // }
-
-private:
-//---------------------------------------------------
+    std::string cuda_code_;
     uint64_t id_;
-    // const size_t memory_cap = 1024 * 1024 * 1024;
 
     int block_per_grid_;
     int threads_per_block_;
 
-    std::string cuda_code_;
     std::string call_func_name_;
 
     std::vector<void*> data_;
@@ -64,9 +63,10 @@ private:
     std::vector<std::string> args_type_;
 
     void * return_buf_;
+    inline static std::atomic<uint64_t> global_count;
 
-//-----------------------------------------------------
-// static
-    std::map<std::string, Data> data_set;
+    std::vector<Data> data_set;
+    std::vector<Data> result_set;
+
     
 };

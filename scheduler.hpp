@@ -29,7 +29,6 @@ class Scheduler : public std::enable_shared_from_this<Scheduler> {
     int queue_full_limit_;
     int largest_timeout_;
     // params;
-    int judge_workload();
     int readjust_param();
 
     std::mutex queue_mutex_;    
@@ -64,6 +63,9 @@ public:
     }
     void async_insert_workload(Workload && wl);
     void async_run();
+    bool judge_large(int wl_n);
+    void thread_mode_run();
+    void process_mode_run();
     void join_tasks(); // blocking all tasks until finished and dispatched.
     void join_insertion(); // block all insertion tasks, which rarely happens
 };

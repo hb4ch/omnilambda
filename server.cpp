@@ -64,7 +64,7 @@ void session::on_read(std::shared_ptr<Scheduler> s, boost::system::error_code ec
 
     std::stringstream ss;
     ss << boost::beast::buffers(read_buffer_.data());
-    Workload wl{wl_count++};
+    Workload wl;
     wl.parse(ss.str());
     auto f = std::async(std::launch::async, [s, &wl] {
         s->async_insert_workload(std::move(wl));
@@ -148,7 +148,7 @@ int main(int argc, char* argv[])
     auto const threads = std::max<int>(1, std::atoi(argv[3]));
 
 
-  
+    Workload::global_count = 0;
     // The io_context is required for all I/O
     boost::asio::io_context ioc { threads };
     boost::asio::io_context sched_ioc { 2 }; 
