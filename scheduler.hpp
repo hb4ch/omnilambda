@@ -31,7 +31,9 @@ class Scheduler : public std::enable_shared_from_this<Scheduler> {
     // params;
     int readjust_param();
 
-    std::mutex queue_mutex_;    
+    std::mutex queue_mutex_;
+    std::mutex thread_queue_mutex_;
+    std::mutex process_queue_mutex_;    
     bool isTasksRunning_;
     std::atomic<bool> time_out_;
     boost::asio::io_service::strand queue_strand_;
@@ -64,6 +66,7 @@ public:
     void async_insert_workload(Workload && wl);
     void async_run();
     bool judge_large(int wl_n);
+    void single_thread(int thread_idx);
     void thread_mode_run();
     void process_mode_run();
     void join_tasks(); // blocking all tasks until finished and dispatched.
