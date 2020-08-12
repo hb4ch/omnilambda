@@ -27,7 +27,7 @@ class Scheduler : public std::enable_shared_from_this<Scheduler> {
     // The actual container of these;
 
     int queue_full_limit_;
-    int largest_timeout_;
+    long largest_timeout_;
     // params;
     int readjust_param();
 
@@ -47,7 +47,7 @@ public:
 
     Scheduler(boost::asio::io_context & sched_ioc)
         : queue_full_limit_(24),
-          largest_timeout_(1),
+          largest_timeout_(500),
           time_out_(false),
           queue_strand_(sched_ioc),
           timer_strand_(sched_ioc),

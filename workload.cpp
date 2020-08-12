@@ -95,8 +95,8 @@ void Workload::parse(const std::string & json_str)
             else if (data.type == Type::FLOAT32)
                 buffer_size *= sizeof(float);
 
-            data.buffer = (void*)malloc(buffer_size + 32);
-            data.size = buffer_size + 32;
+            data.buffer = (void*)malloc(buffer_size);
+            data.size = buffer_size;
             void* data_p = data.buffer;
             // Now parses array data_1 ... data_n
             
@@ -105,16 +105,20 @@ void Workload::parse(const std::string & json_str)
             for (rapidjson::SizeType i = 0; i < a.Size(); i++) {
                 if (data.type == Type::INT32) {
                     *((int*)data_p) = a[i].GetInt();
+                    // std::cout << "Parsed element: " << *((int*)data_p) << "\n";
                     data_p = (int*)data_p + 1;
                 } else if (data.type == Type::INT64) {
-                    *((int*)data_p) = a[i].GetInt64();
+                    *((long*)data_p) = a[i].GetInt64();
+                    // std::cout << "Parsed element: " << *((long*)data_p) << "\n";
                     data_p = (long*)data_p + 1;
                 } else if (data.type == Type::FLOAT32) {
-                    *((int*)data_p) = a[i].GetDouble();
+                    *((float*)data_p) = a[i].GetDouble();
+                    // std::cout << "Parsed element: " << *((float*)data_p) << "\n";
                     data_p = (double*)data_p + 1;
                 } else if (data.type == Type::FLOAT64) {
-                    *((int*)data_p) = a[i].GetDouble();
-                    data_p = (float*)data_p + 1;
+                    *((double*)data_p) = a[i].GetDouble();
+                    // std::cout << "Parsed element: " << *((double*)data_p) << "\n";
+                    data_p = (double*)data_p + 1;
                 }
             }
             data.name = v;
@@ -176,21 +180,21 @@ void Workload::output() {
         std::cout << "data name: " << i.name << "\n";
         std::cout << "data: \n";
         std::cout << "[ ";
-        for(size_t j = 0; j < i.size;) {
+        for(size_t j = 0, k = 0; j < i.size; k++) {
             if(i.type == Type::INT32) {
-                printf("%d ", *((int*)i.buffer + j));
+                printf("%d ", *((int*)i.buffer + k));
                 j += sizeof(int);
             }
             else if(i.type == Type::INT64) {
-                printf("%ld ", *((long*)i.buffer + j));
+                printf("%ld ", *((long*)i.buffer + k));
                 j += sizeof(long);
             }
             else if(i.type == Type::FLOAT32) {
-                printf("%f ", *((float*)i.buffer + j));
+                printf("%f ", *((float*)i.buffer + k));
                 j += sizeof(float);
             }
             else {
-                printf("%lf ", *((double*)i.buffer + j));
+                printf("%lf ", *((double*)i.buffer + k));
                 j += sizeof(double);
             }
         }

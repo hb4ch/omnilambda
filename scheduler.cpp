@@ -34,7 +34,8 @@ void Scheduler::async_insert_workload(Workload&& wl)
     map_id_workload_.emplace(std::make_pair(wl.getid(), std::move(wl)));
     queue_mutex_.unlock();
     if (!queueing_) {
-        timer_.expires_from_now(boost::posix_time::seconds(2));
+        std::cout << "largest_timeout_: " << largest_timeout_ << std::endl;
+        timer_.expires_from_now(boost::posix_time::milliseconds(largest_timeout_));
         queueing_ = true;
         std::async(std::launch::async, [this] {
             timer_.wait();
@@ -90,22 +91,21 @@ bool Scheduler::judge_large(int wl_n)
         return true;
 
     //return false; TODO:
-    return true;
+    return false;
 }
 
 void Scheduler::single_thread(int thread_idx)
 {
-    std::cout << "In child now\n" << std::endl;
+    // std::cout << "In child now\n" << std::endl;
     queue_mutex_.lock();
     int task_id = process_mode_tasks_[thread_idx];
     Workload wl = map_id_workload_[task_id];
-    std::cout << "Running: \n" << wl.cuda_code_;
+    // std::cout << "Running: \n" << wl.cuda_code_;
     wl.output();
     queue_mutex_.unlock();
 
     jitify::JitCache kernel_cache;
 
-    std::cout << "About to compile: \n";
     std::cout << wl.cuda_code_;
     jitify::Program program = kernel_cache.program(wl.cuda_code_, 0);
 
@@ -255,21 +255,19 @@ void Scheduler::thread_mode_run()
             int task_id = thread_mode_tasks_[thread_idx];
             Workload wl = map_id_workload_[task_id];
             // std::cout << "Running: \n" << wl.cuda_code_;
-            wl.output();
+            // wl.output();
             queue_mutex_.unlock();
 
             jitify::JitCache kernel_cache;
 
-            std::cout << "About to compile: \n";
-            std::cout << wl.cuda_code_;
+            // std::cout << "About to compile: \n";
+            // std::cout << wl.cuda_code_;
             jitify::Program program = kernel_cache.program(wl.cuda_code_, 0);
 
             cudaError_t err = cudaSuccess;
 
             dim3 threadsPerBlock(wl.threads_per_block_);
             dim3 blocksPerGrid(wl.block_per_grid_);
-
-            Type type = wl.data_set[0].type;
 
             std::vector<void*> data_pointers;
             for (Data& i : wl.data_set) {

@@ -23,6 +23,9 @@
 #include <fstream>
 #include <memory>
 #include <string>
+#include <map>
+#include <iomanip>
+#include <random>
 #include <sstream>
 
 using tcp = boost::asio::ip::tcp;               // from <boost/asio/ip/tcp.hpp>
@@ -182,6 +185,15 @@ public:
 
 int main(int argc, char** argv)
 {
+    // std::random_device rd;
+    // std::mt19937 gen(rd());
+    
+    // std::poisson_distribution<>d(20);
+
+    // for(int i = 0; i < 100; i++) {
+    //     std::cout << "emit: " << d(gen) << std::endl;
+    //     sleep(0.5);
+    // }
     // Check command line arguments.
     if(argc != 4)
     {
@@ -194,6 +206,8 @@ int main(int argc, char** argv)
     auto const host = argv[1];
     auto const port = argv[2];
     auto const workload_file = argv[3];
+
+
     std::string workload_jsonstr;
     try {
         std::ifstream fs(workload_file);
