@@ -1,0 +1,26 @@
+{
+    "cuda_code" : "vectoradd \n __global__ void \n vectorAdd(int *A, int *B, int *C, int numElements) \n { \n int i = blockDim.x * blockIdx.x + threadIdx.x; \n if (i < numElements)        \n { \n C[i] = A[i] + B[i]; \n C[i] *= C[i] * 4; \n C[i] -= 2; \n C[i] = (C[i]*0.76 + C[i]) * 2;    \n} \n} \n",
+    "block_per_grid" : 512,
+    "threads_per_block" : 977,
+    "data_1" : {
+        "type" : "int",
+        "dim_x" : 1,
+        "dim_y" : 500000,
+        "data": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    },
+    "data_2" : {
+        "type" : "int",
+        "dim_x" : 500000,
+        "dim_y" : 1,
+        "data": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    },
+    "result_1" : {
+        "type" : "int",
+        "dim_x" : 1,
+        "dim_y" : 500000
+    },
+    "call" : {
+        "func_name" : "vectorAdd", 
+        "args" : ["data_1", "data_2", "result_1", "16"]
+    }
+}
