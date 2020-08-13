@@ -3,6 +3,7 @@
 #include <map>
 #include <string>
 #include <thread>
+#include <algorithm>
 #include <vector>
 // std
 
@@ -68,26 +69,40 @@ void Scheduler::async_run()
     workload_queue_.clear();
     queue_mutex_.unlock();
     //timer_.get_io_service().notify_fork(boost::asio::io_service::fork_prepare);
-
+    if( process_mode_tasks_.size() == 0 
+        || (double)thread_mode_tasks_.size() / (double)process_mode_tasks_.size() > 0.75f) {
+            long new_largest_timeout_ = long(double(largest_timeout_) * 0.7f);
+            largest_timeout_ = std::max(50L, new_largest_timeout_);
+        }
+    else if(thread_mode_tasks_.size() == 0 
+        || (double)process_mode_tasks_.size() / (double)thread_mode_tasks_.size() > 0.75f) {
+        long new_largest_timeout_ = long(double(largest_timeout_) * 1.3f);
+        largest_timeout_ = std::min(2000L, new_largest_timeout_);
+    }
+    // if threads_tasks dominates incoming requests, lower time_out. Otherwise, raise time_out_time;
+    
     thread_mode_run();
 
     queue_mutex_.lock();
     thread_mode_tasks_.clear();
     queue_mutex_.unlock();
-    
+
     process_mode_run();
 
     queue_mutex_.lock();
     process_mode_tasks_.clear();
     queue_mutex_.unlock();
 
+    for (auto& i : map_id_workload_) {
+        i.second.free();
+    }
     map_id_workload_.clear();
 }
 
 bool Scheduler::judge_large(int wl_n)
 {
     Workload& curr = map_id_workload_[wl_n];
-    if ((uint64_t)curr.get_conf().first * (uint64_t)curr.get_conf().second >= 1000000ULL)
+    if ((uint64_t)curr.get_conf().first * (uint64_t)curr.get_conf().second >= 800000ULL)
         return true;
 
     //return false; TODO:
@@ -181,11 +196,6 @@ void Scheduler::single_thread(int thread_idx)
     for (void* p : cuda_result_pointers) {
         cudaFree(p);
     }
-
-    for (void* p : data_pointers) {
-        free(p);
-    }
-
 }
 
 void Scheduler::process_mode_run()
@@ -236,7 +246,6 @@ void Scheduler::process_mode_run()
         //timer_.get_io_service().notify_fork(boost::asio::io_service::fork_parent);
         std::cout << "Process mode done!\n";
     }
-    
 }
 
 void Scheduler::thread_mode_run()
@@ -282,19 +291,33 @@ void Scheduler::thread_mode_run()
 
             for (Data& i : wl.data_set) {
                 void* p = NULL;
-                cudaMalloc((void**)&p, i.size);
+                err = cudaMalloc((void**)&p, i.size);
+                if (err) {
+                    std::cerr << "cudaMalloc error!\n";
+                    return;
+                }
                 cuda_pointers.push_back(p);
             }
 
             std::vector<void*> cuda_result_pointers;
             for (Data& i : wl.result_set) {
                 void* p = NULL;
-                cudaMalloc((void**)&p, i.size);
+        
+                err = cudaMalloc((void**)&p, i.size);
+                if (err) {
+                    std::cerr << "cudaMalloc error!\n";
+                    return;
+                }
+
                 cuda_result_pointers.push_back(p);
             }
 
             for (size_t i = 0; i < data_pointers.size(); i++) {
-                cudaMemcpy(cuda_pointers[i], data_pointers[i], wl.data_set[i].size, cudaMemcpyHostToDevice);
+                err = cudaMemcpy(cuda_pointers[i], data_pointers[i], wl.data_set[i].size, cudaMemcpyHostToDevice);
+                if (err) {
+                    std::cerr << "cudaMemcpy error!\n";
+                    return;
+                }
             }
 
             bool number_arg_exist = 0;
@@ -306,9 +329,8 @@ void Scheduler::thread_mode_run()
                     break;
                 }
             }
-            std::cout << "here" << std::endl;
             using jitify::reflection::type_of;
-            std::cout << "Calling kernel: " << wl.call_func_name_ << std::endl;
+            // std::cout << "Calling kernel: " << wl.call_func_name_ << std::endl;
             if (wl.args_.size() == 4) {
                 if (number_arg_exist)
                     CHECK_CUDA(program.kernel(wl.call_func_name_)
@@ -325,19 +347,30 @@ void Scheduler::thread_mode_run()
             }
 
             for (size_t i = 0; i < wl.result_set.size(); i++) {
-                cudaMemcpy(wl.result_set[i].buffer, cuda_result_pointers[i], wl.result_set[i].size, cudaMemcpyDeviceToHost);
+                err = cudaMemcpy(wl.result_set[i].buffer, cuda_result_pointers[i], wl.result_set[i].size, cudaMemcpyDeviceToHost);
+                if (err) {
+                    std::cerr << "cudaMemcpy back error!\n";
+                }
             }
 
             for (void* p : cuda_pointers) {
-                cudaFree(p);
+                if(!p) {
+                    std::cerr << "Trying to free null cuda ptrs. (l. 344)\n";
+                }
+                err = cudaFree(p);
+                if (err) {
+                    std::cerr << "cudaMalloc error!\n";
+                }
             }
 
             for (void* p : cuda_result_pointers) {
-                cudaFree(p);
-            }
-
-            for (void* p : data_pointers) {
-                free(p);
+                if(!p) {
+                    std::cerr << "Trying to free null cuda ptrs. (l. 354)\n";
+                }
+                err = cudaFree(p);
+                if (err) {
+                    std::cerr << "cudaMalloc error!\n";
+                }
             }
         });
     }

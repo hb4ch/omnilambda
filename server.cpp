@@ -60,15 +60,19 @@ void session::on_read(std::shared_ptr<Scheduler> s, boost::system::error_code ec
         return;
 
     if (ec)
-        fail(ec, "read");
+        // fail(ec, "read");
+        std::cerr << "Reading error from session::on_read\n";
 
     std::stringstream ss;
     ss << boost::beast::buffers(read_buffer_.data());
     Workload wl;
-    wl.parse(ss.str());
-    auto f = std::async(std::launch::async, [s, &wl] {
-        s->async_insert_workload(std::move(wl));
-    });
+    bool success = wl.parse(ss.str());
+    //wl.output();
+    if(success) {
+        auto f = std::async(std::launch::async, [s, &wl] {
+            s->async_insert_workload(std::move(wl));
+        });
+    }
     
     //s->join();
 
@@ -82,7 +86,7 @@ void session::on_read(std::shared_ptr<Scheduler> s, boost::system::error_code ec
     // Now queue the workload and block;
     
     ws_.text(ws_.got_text());
-    std::string ret_json = "results are in\n";
+    std::string ret_json = "echo";
     
     ws_.async_write(
         boost::asio::buffer(ret_json),
@@ -97,6 +101,7 @@ void session::on_write(std::shared_ptr<Scheduler> s, boost::system::error_code e
 
     if (ec)
         return fail(ec, "write");
+        //std::cerr << "write error\n";
 
     // Clear the buffer
     read_buffer_.consume(read_buffer_.size());

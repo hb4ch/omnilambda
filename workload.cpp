@@ -47,10 +47,15 @@
     }
 }
 */
-void Workload::parse(const std::string & json_str)
+bool Workload::parse(const std::string & json_str)
 {
     rapidjson::Document d;
-    d.Parse(json_str.c_str());
+    rapidjson::ParseResult ok = d.Parse(json_str.c_str());
+    if(!ok) {
+        std::cerr << "JSON parse error: " << std::endl;
+        std::cerr << json_str;
+        return false;
+    }
 
     cuda_code_ = std::move(d["cuda_code"].GetString());
     block_per_grid_ = d["block_per_grid"].GetInt();
@@ -162,6 +167,7 @@ void Workload::parse(const std::string & json_str)
             result_set.push_back(res);
         }
     }
+    return true;
 }
 
 void Workload::output() {
