@@ -18,9 +18,9 @@
 #include <boost/beast/websocket.hpp>
 // boost
 
+#include "scheduler.hpp"
 #include "server.hpp"
 #include "workload.hpp"
-#include "scheduler.hpp"
 
 using tcp = boost::asio::ip::tcp; // from <boost/asio/ip/tcp.hpp>
 namespace websocket = boost::beast::websocket; // from <boost/beast/websocket.hpp>
@@ -65,17 +65,16 @@ void session::on_read(std::shared_ptr<Scheduler> s, boost::system::error_code ec
 
     std::stringstream ss;
     ss << boost::beast::buffers(read_buffer_.data());
-    Workload wl;
-    bool success = wl.parse(ss.str());
+    std::shared_ptr<Workload> wl_ptr = std::make_shared<Workload>();
+    bool success = wl_ptr->parse(ss.str());
     //wl.output();
-    if(success) {
-        auto f = std::async(std::launch::async, [s, &wl] {
-            s->async_insert_workload(std::move(wl));
+    if (success) {
+        auto f = std::async(std::launch::async, [s, wl_ptr] {
+            s->async_insert_workload(wl_ptr);
         });
     }
-    
-    //s->join();
 
+    //s->join();
 
     // {
     //     const std::lock_guard<std::mutex> lock(printlock);
@@ -84,10 +83,10 @@ void session::on_read(std::shared_ptr<Scheduler> s, boost::system::error_code ec
     // Echo the message
 
     // Now queue the workload and block;
-    
+
     ws_.text(ws_.got_text());
     std::string ret_json = "echo";
-    
+
     ws_.async_write(
         boost::asio::buffer(ret_json),
         boost::asio::bind_executor(
@@ -101,12 +100,10 @@ void session::on_write(std::shared_ptr<Scheduler> s, boost::system::error_code e
 
     if (ec)
         return fail(ec, "write");
-        //std::cerr << "write error\n";
+    //std::cerr << "write error\n";
 
-    // Clear the buffer
     read_buffer_.consume(read_buffer_.size());
 
-    // Do another read
     do_read(s);
 }
 
@@ -130,14 +127,11 @@ void listener::on_accept(boost::system::error_code ec)
     if (ec) {
         fail(ec, "accept");
     } else {
-        // Create the session and run it
         std::make_shared<session>(std::move(socket_))->run(s_);
     }
 
-    // Accept another connection
     do_accept();
 }
-
 
 int main(int argc, char* argv[])
 {
@@ -152,19 +146,18 @@ int main(int argc, char* argv[])
     auto const port = static_cast<unsigned short>(std::atoi(argv[2]));
     auto const threads = std::max<int>(1, std::atoi(argv[3]));
 
-
     Workload::global_count = 0;
     // The io_context is required for all I/O
     boost::asio::io_context ioc { threads };
-    boost::asio::io_context sched_ioc { 2 }; 
+    boost::asio::io_context sched_ioc { 2 };
 
     std::shared_ptr<Scheduler> s { std::make_shared<Scheduler>(sched_ioc) };
     // Create and launch a listening port
     std::make_shared<listener>(ioc, s, tcp::endpoint { address, port })->run();
-    
+
     // Run the I/O service on the requested number of threads
     std::vector<std::thread> sched_threads;
-    
+
     sched_threads.reserve(2);
     sched_threads.emplace_back([&sched_ioc] { sched_ioc.run(); });
     sched_threads.emplace_back([&sched_ioc] { sched_ioc.run(); });
@@ -174,8 +167,6 @@ int main(int argc, char* argv[])
     for (auto i = threads - 1; i > 0; --i)
         v.emplace_back([&ioc] { ioc.run(); });
     ioc.run();
-
-  
 
     return EXIT_SUCCESS;
 }

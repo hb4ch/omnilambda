@@ -16,14 +16,17 @@
 // boost
 
 #include "workload.hpp"
+#include "ts_queue.hpp"
 
 class Scheduler : public std::enable_shared_from_this<Scheduler> {
 
-    std::vector<int> workload_queue_;
-    std::vector<int> thread_mode_tasks_;
-    std::vector<int> process_mode_tasks_;
+    //std::vector<int> workload_queue_;
+    ts_queue<std::shared_ptr<Workload>> workload_queue_;
+    ts_vector<std::shared_ptr<Workload>> thread_mode_tasks_;
+    ts_vector<std::shared_ptr<Workload>> process_mode_tasks_;
 
-    std::map<int, Workload> map_id_workload_;
+    //std::map<int, Workload> map_id_workload_;
+    //ts_map<int, Workload> map_id_workload_;
     // The actual container of these;
 
     int queue_full_limit_;
@@ -46,7 +49,7 @@ public:
 
     Scheduler(boost::asio::io_context & sched_ioc)
         : queue_full_limit_(24),
-          largest_timeout_(500),
+          largest_timeout_(5000),
           time_out_(false),
           queue_strand_(sched_ioc),
           timer_strand_(sched_ioc),
@@ -62,10 +65,10 @@ public:
     void start() {
         std::cout << "Context running\n";
     }
-    void async_insert_workload(Workload && wl);
+    void async_insert_workload(std::shared_ptr<Workload>);
     void async_run();
-    bool judge_large(int wl_n);
-    void single_thread(int thread_idx);
+    bool judge_large(std::shared_ptr<Workload>);
+    void single_thread(std::shared_ptr<Workload>);
     void thread_mode_run();
     void process_mode_run();
     void join_tasks(); // blocking all tasks until finished and dispatched.

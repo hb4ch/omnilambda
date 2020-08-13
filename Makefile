@@ -1,6 +1,6 @@
 INCLUDE ?= /home/hb4ch/boost_1_68_0/boost/include
 LDCUDA ?= -lcuda -lcudart -lnvrtc  
-LDBOOST ?= -lboost_system -lpthread -pthread
+LDBOOST ?= -lboost_system -lboost_thread -lpthread -pthread
 CXXFLAG = -std=c++17 -O2 -Wall
 
 all: async_client server sync_client
@@ -8,13 +8,13 @@ all: async_client server sync_client
 server : server.o workload.o scheduler.o
 	g++ server.o workload.o scheduler.o -o server $(LDBOOST) $(LDCUDA)
 
-server.o: server.cpp server.hpp
+server.o: server.cpp server.hpp ts_queue.hpp
 	g++ $(CXXFLAG) -c server.cpp -I$(INCLUDE)
 
-workload.o: workload.cpp workload.hpp
+workload.o: workload.cpp workload.hpp ts_queue.hpp
 	g++ $(CXXFLAG) -c workload.cpp -I$(INCLUDE)
 
-scheduler.o : scheduler.cpp scheduler.hpp
+scheduler.o : scheduler.cpp scheduler.hpp ts_queue.hpp
 	g++ $(CXXFLAG) -c scheduler.cpp -I$(INCLUDE)
 
 async_client : async_client.o

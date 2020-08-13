@@ -1,9 +1,9 @@
+#include <algorithm>
 #include <chrono>
 #include <deque>
 #include <map>
 #include <string>
 #include <thread>
-#include <algorithm>
 #include <vector>
 // std
 
@@ -26,14 +26,15 @@
 
 #define JITIFY_THREAD_SAFE 1
 
-void Scheduler::async_insert_workload(Workload&& wl)
+void Scheduler::async_insert_workload(std::shared_ptr<Workload> wl_ptr)
 {
-    queue_mutex_.lock();
+    // queue_mutex_.lock();
     id_count_++;
-    workload_queue_.push_back(wl.getid());
+    workload_queue_.push(wl_ptr);
     std::cout << "Inserted workload.\n";
-    map_id_workload_.emplace(std::make_pair(wl.getid(), std::move(wl)));
-    queue_mutex_.unlock();
+    //map_id_workload_.emplace(wl_ptr->getid(), std::move(wl));
+    /// TODO
+    // queue_mutex_.unlock();
     if (!queueing_) {
         std::cout << "largest_timeout_: " << largest_timeout_ << std::endl;
         timer_.expires_from_now(boost::posix_time::microseconds(largest_timeout_));
@@ -58,105 +59,94 @@ void Scheduler::async_run()
     // Batch running...
     queueing_ = false;
 
-    queue_mutex_.lock();
-    thread_mode_tasks_.clear();
-    process_mode_tasks_.clear();
+    // queue_mutex_.lock();
+
     std::cout << "Batch running... " << workload_queue_.size() << std::endl;
-    for (int wl_n : workload_queue_) {
-        if (judge_large(wl_n)) {
-            process_mode_tasks_.push_back(wl_n);
+
+    while (!workload_queue_.empty()) {
+        std::shared_ptr<Workload> front;
+        workload_queue_.wait_and_pop(front);
+        if (judge_large(front)) {
+            process_mode_tasks_.push_back(front);
         } else
-            thread_mode_tasks_.push_back(wl_n);
+            thread_mode_tasks_.push_back(front);
     }
-    workload_queue_.clear();
-    queue_mutex_.unlock();
+
+    // queue_mutex_.unlock();
     //timer_.get_io_service().notify_fork(boost::asio::io_service::fork_prepare);
-    if( process_mode_tasks_.size() == 0 
-        || (double)thread_mode_tasks_.size() / (double)process_mode_tasks_.size() > 0.75f) {
-            long new_largest_timeout_ = long(double(largest_timeout_) * 0.7f);
-            largest_timeout_ = std::max(50L, new_largest_timeout_);
-        }
-    else if(thread_mode_tasks_.size() == 0 
-        || (double)process_mode_tasks_.size() / (double)thread_mode_tasks_.size() > 0.75f) {
-        long new_largest_timeout_ = long(double(largest_timeout_) * 1.3f);
-        largest_timeout_ = std::min(2000L, new_largest_timeout_);
-    }
+    // if( process_mode_tasks_.size() == 0
+    //     || (double)thread_mode_tasks_.size() / (double)process_mode_tasks_.size() > 0.75f) {
+    //         long new_largest_timeout_ = long(double(largest_timeout_) * 0.7f);
+    //         largest_timeout_ = std::max(50L, new_largest_timeout_);
+    //     }
+    // else if(thread_mode_tasks_.size() == 0
+    //     || (double)process_mode_tasks_.size() / (double)thread_mode_tasks_.size() > 0.75f) {
+    //     long new_largest_timeout_ = long(double(largest_timeout_) * 1.3f);
+    //     largest_timeout_ = std::min(2000L, new_largest_timeout_);
+    // }
     // if threads_tasks dominates incoming requests, lower time_out. Otherwise, raise time_out_time;
-    
+
     thread_mode_run();
     process_mode_run();
-    
-    queue_mutex_.lock();
-    for (auto& i : map_id_workload_) {
-        i.second.free();
-    }
-    //map_id_workload_.clear();
-    queue_mutex_.unlock();
+
+    thread_mode_tasks_.clear();
+    process_mode_tasks_.clear();
 }
 
-bool Scheduler::judge_large(int wl_n)
+bool Scheduler::judge_large(std::shared_ptr<Workload> wl_ptr)
 {
-    Workload& curr = map_id_workload_[wl_n];
-    if ((uint64_t)curr.get_conf().first * (uint64_t)curr.get_conf().second >= 800000ULL)
+    if ((uint64_t)wl_ptr->get_conf().first * (uint64_t)wl_ptr->get_conf().second >= 800000ULL)
         return true;
-
-    //return false; TODO:
     return false;
 }
 
-void Scheduler::single_thread(int thread_idx)
+void Scheduler::single_thread(std::shared_ptr<Workload> wl_ptr)
 {
     // std::cout << "In child now\n" << std::endl;
-    queue_mutex_.lock();
-    int task_id = process_mode_tasks_[thread_idx];
-    Workload wl = map_id_workload_[task_id];
     // std::cout << "Running: \n" << wl.cuda_code_;
-    wl.output();
-    queue_mutex_.unlock();
+    wl_ptr->output();
 
     jitify::JitCache kernel_cache;
 
-    std::cout << wl.cuda_code_;
-    jitify::Program program = kernel_cache.program(wl.cuda_code_, 0);
+    std::cout << wl_ptr->cuda_code_;
+    jitify::Program program = kernel_cache.program(wl_ptr->cuda_code_, 0);
 
     cudaError_t err = cudaSuccess;
 
-    dim3 threadsPerBlock(wl.threads_per_block_);
-    dim3 blocksPerGrid(wl.block_per_grid_);
-
-    Type type = wl.data_set[0].type;
+    dim3 threadsPerBlock(wl_ptr->threads_per_block_);
+    dim3 blocksPerGrid(wl_ptr->block_per_grid_);
 
     std::vector<void*> data_pointers;
-    for (Data& i : wl.data_set) {
+    for (Data& i : wl_ptr->data_set) {
         if (!i.buffer) {
-            queue_mutex_.lock();
+            // queue_mutex_.lock();
             std::cout << "Null data pointers\n";
-            queue_mutex_.unlock();
+            // queue_mutex_.unlock();
         }
         data_pointers.push_back(i.buffer);
     }
     std::vector<void*> cuda_pointers;
 
-    for (Data& i : wl.data_set) {
+    for (Data& i : wl_ptr->data_set) {
         void* p = NULL;
         cudaMalloc((void**)&p, i.size);
         cuda_pointers.push_back(p);
     }
 
     std::vector<void*> cuda_result_pointers;
-    for (Data& i : wl.result_set) {
+    for (Data& i : wl_ptr->result_set) {
         void* p = NULL;
         cudaMalloc((void**)&p, i.size);
         cuda_result_pointers.push_back(p);
     }
 
     for (size_t i = 0; i < data_pointers.size(); i++) {
-        cudaMemcpy(cuda_pointers[i], data_pointers[i], wl.data_set[i].size, cudaMemcpyHostToDevice);
+        cudaMemcpy(cuda_pointers[i], data_pointers[i], wl_ptr->data_set[i].size, cudaMemcpyHostToDevice);
     }
 
     bool number_arg_exist = 0;
     int number_arg;
-    for (std::string& str : wl.args_) {
+    for (std::string& str : wl_ptr->args_) {
         if (std::isdigit(str[0])) {
             number_arg = std::stoi(str);
             number_arg_exist = true;
@@ -164,15 +154,15 @@ void Scheduler::single_thread(int thread_idx)
         }
     }
     using jitify::reflection::type_of;
-    std::cout << "Calling kernel: " << wl.call_func_name_ << std::endl;
-    if (wl.args_.size() == 4) {
+    std::cout << "Calling kernel: " << wl_ptr->call_func_name_ << std::endl;
+    if (wl_ptr->args_.size() == 4) {
         if (number_arg_exist)
-            CHECK_CUDA(program.kernel(wl.call_func_name_)
+            CHECK_CUDA(program.kernel(wl_ptr->call_func_name_)
                            .instantiate()
                            .configure(blocksPerGrid, threadsPerBlock)
                            .launch(cuda_pointers[0], cuda_pointers[1], cuda_result_pointers[0], number_arg));
-    } else if (wl.args_.size() == 5) {
-        CHECK_CUDA(program.kernel(wl.call_func_name_)
+    } else if (wl_ptr->args_.size() == 5) {
+        CHECK_CUDA(program.kernel(wl_ptr->call_func_name_)
                        .instantiate()
                        .configure(blocksPerGrid, threadsPerBlock)
                        .launch(cuda_pointers[0], cuda_pointers[1], cuda_pointers[2], cuda_result_pointers[0], number_arg));
@@ -180,8 +170,8 @@ void Scheduler::single_thread(int thread_idx)
         std::cout << "Unsupported kernel" << std::endl;
     }
 
-    for (size_t i = 0; i < wl.result_set.size(); i++) {
-        cudaMemcpy(wl.result_set[i].buffer, cuda_result_pointers[i], wl.result_set[i].size, cudaMemcpyDeviceToHost);
+    for (size_t i = 0; i < wl_ptr->result_set.size(); i++) {
+        cudaMemcpy(wl_ptr->result_set[i].buffer, cuda_result_pointers[i], wl_ptr->result_set[i].size, cudaMemcpyDeviceToHost);
     }
 
     for (void* p : cuda_pointers) {
@@ -195,9 +185,9 @@ void Scheduler::single_thread(int thread_idx)
 
 void Scheduler::process_mode_run()
 {
-    queue_mutex_.lock();
+    // queue_mutex_.lock();
     int n = process_mode_tasks_.size();
-    queue_mutex_.unlock();
+    // queue_mutex_.unlock();
 
     if (n == 0) {
         std::cout << "No process_mode tasks, returning...\n";
@@ -212,22 +202,25 @@ void Scheduler::process_mode_run()
     /* Start children. */
     // std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     std::cout << "getpid called.\n";
-    for (i = 0; i < n; ++i) {
+
+    size_t process_num = this->process_mode_tasks_.size();
+    for (size_t i = 0; i < process_num; i++) {
         pid_t forked = fork();
-        std::cout << "Forked = " << forked << "\n";
+        //std::cout << "Forked = " << forked << "\n";
         if ((pids[i] = forked) < 0) {
             perror("fork");
             abort();
         } else if (forked == 0) {
             std::cout << "i'm a child\n";
             //timer_.get_io_service().notify_fork(boost::asio::io_service::fork_child);
-            single_thread(i);
+            single_thread(process_mode_tasks_.at(i));
             exit(0);
         }
     }
-    if (getpid() == parent_pid) {
-        //timer_.get_io_service().notify_fork(boost::asio::io_service::fork_parent);
-    }
+
+    // if (getpid() == parent_pid) {
+    //     //timer_.get_io_service().notify_fork(boost::asio::io_service::fork_parent);
+    // }
 
     int status;
     pid_t pid;
@@ -255,36 +248,28 @@ void Scheduler::thread_mode_run()
     std::vector<std::thread> cuda_threads;
     for (int thread_idx = 0; thread_idx < thread_num; thread_idx++) {
         cuda_threads.emplace_back([this, thread_idx]() {
-            queue_mutex_.lock();
-            int task_id = thread_mode_tasks_[thread_idx];
-            Workload wl = map_id_workload_[task_id];
+            std::shared_ptr<Workload> wl_ptr = thread_mode_tasks_.at(thread_idx);
             // std::cout << "Running: \n" << wl.cuda_code_;
-            // wl.output();
-            queue_mutex_.unlock();
+            // wl_ptr->output();
 
             jitify::JitCache kernel_cache;
-
-            // std::cout << "About to compile: \n";
-            // std::cout << wl.cuda_code_;
-            jitify::Program program = kernel_cache.program(wl.cuda_code_, 0);
+            jitify::Program program = kernel_cache.program(wl_ptr->cuda_code_, 0);
 
             cudaError_t err = cudaSuccess;
 
-            dim3 threadsPerBlock(wl.threads_per_block_);
-            dim3 blocksPerGrid(wl.block_per_grid_);
+            dim3 threadsPerBlock(wl_ptr->threads_per_block_);
+            dim3 blocksPerGrid(wl_ptr->block_per_grid_);
 
             std::vector<void*> data_pointers;
-            for (Data& i : wl.data_set) {
+            for (Data& i : wl_ptr->data_set) {
                 if (!i.buffer) {
-                    queue_mutex_.lock();
                     std::cout << "Null data pointers\n";
-                    queue_mutex_.unlock();
                 }
                 data_pointers.push_back(i.buffer);
             }
             std::vector<void*> cuda_pointers;
 
-            for (Data& i : wl.data_set) {
+            for (Data& i : wl_ptr->data_set) {
                 void* p = NULL;
                 err = cudaMalloc((void**)&p, i.size);
                 if (err) {
@@ -295,9 +280,9 @@ void Scheduler::thread_mode_run()
             }
 
             std::vector<void*> cuda_result_pointers;
-            for (Data& i : wl.result_set) {
+            for (Data& i : wl_ptr->result_set) {
                 void* p = NULL;
-        
+
                 err = cudaMalloc((void**)&p, i.size);
                 if (err) {
                     std::cerr << "cudaMalloc error!\n";
@@ -308,7 +293,7 @@ void Scheduler::thread_mode_run()
             }
 
             for (size_t i = 0; i < data_pointers.size(); i++) {
-                err = cudaMemcpy(cuda_pointers[i], data_pointers[i], wl.data_set[i].size, cudaMemcpyHostToDevice);
+                err = cudaMemcpy(cuda_pointers[i], data_pointers[i], wl_ptr->data_set[i].size, cudaMemcpyHostToDevice);
                 if (err) {
                     std::cerr << "cudaMemcpy error!\n";
                     return;
@@ -317,7 +302,7 @@ void Scheduler::thread_mode_run()
 
             bool number_arg_exist = 0;
             int number_arg;
-            for (std::string& str : wl.args_) {
+            for (std::string& str : wl_ptr->args_) {
                 if (std::isdigit(str[0])) {
                     number_arg = std::stoi(str);
                     number_arg_exist = true;
@@ -325,15 +310,14 @@ void Scheduler::thread_mode_run()
                 }
             }
             using jitify::reflection::type_of;
-            // std::cout << "Calling kernel: " << wl.call_func_name_ << std::endl;
-            if (wl.args_.size() == 4) {
+            if (wl_ptr->args_.size() == 4) {
                 if (number_arg_exist)
-                    CHECK_CUDA(program.kernel(wl.call_func_name_)
+                    CHECK_CUDA(program.kernel(wl_ptr->call_func_name_)
                                    .instantiate()
                                    .configure(blocksPerGrid, threadsPerBlock)
                                    .launch(cuda_pointers[0], cuda_pointers[1], cuda_result_pointers[0], number_arg));
-            } else if (wl.args_.size() == 5) {
-                CHECK_CUDA(program.kernel(wl.call_func_name_)
+            } else if (wl_ptr->args_.size() == 5) {
+                CHECK_CUDA(program.kernel(wl_ptr->call_func_name_)
                                .instantiate()
                                .configure(blocksPerGrid, threadsPerBlock)
                                .launch(cuda_pointers[0], cuda_pointers[1], cuda_pointers[2], cuda_result_pointers[0], number_arg));
@@ -341,15 +325,15 @@ void Scheduler::thread_mode_run()
                 std::cout << "Unsupported kernel" << std::endl;
             }
 
-            for (size_t i = 0; i < wl.result_set.size(); i++) {
-                err = cudaMemcpy(wl.result_set[i].buffer, cuda_result_pointers[i], wl.result_set[i].size, cudaMemcpyDeviceToHost);
+            for (size_t i = 0; i < wl_ptr->result_set.size(); i++) {
+                err = cudaMemcpy(wl_ptr->result_set[i].buffer, cuda_result_pointers[i], wl_ptr->result_set[i].size, cudaMemcpyDeviceToHost);
                 if (err) {
                     std::cerr << "cudaMemcpy back error!\n";
                 }
             }
 
             for (void* p : cuda_pointers) {
-                if(!p) {
+                if (!p) {
                     std::cerr << "Trying to free null cuda ptrs. (l. 344)\n";
                 }
                 err = cudaFree(p);
@@ -359,7 +343,7 @@ void Scheduler::thread_mode_run()
             }
 
             for (void* p : cuda_result_pointers) {
-                if(!p) {
+                if (!p) {
                     std::cerr << "Trying to free null cuda ptrs. (l. 354)\n";
                 }
                 err = cudaFree(p);
