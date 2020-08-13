@@ -36,7 +36,7 @@ void Scheduler::async_insert_workload(Workload&& wl)
     queue_mutex_.unlock();
     if (!queueing_) {
         std::cout << "largest_timeout_: " << largest_timeout_ << std::endl;
-        timer_.expires_from_now(boost::posix_time::milliseconds(largest_timeout_));
+        timer_.expires_from_now(boost::posix_time::microseconds(largest_timeout_));
         queueing_ = true;
         std::async(std::launch::async, [this] {
             timer_.wait();
@@ -59,6 +59,8 @@ void Scheduler::async_run()
     queueing_ = false;
 
     queue_mutex_.lock();
+    thread_mode_tasks_.clear();
+    process_mode_tasks_.clear();
     std::cout << "Batch running... " << workload_queue_.size() << std::endl;
     for (int wl_n : workload_queue_) {
         if (judge_large(wl_n)) {
@@ -83,14 +85,12 @@ void Scheduler::async_run()
     
     thread_mode_run();
     process_mode_run();
-
+    
     queue_mutex_.lock();
-    thread_mode_tasks_.clear();
-    process_mode_tasks_.clear();
     for (auto& i : map_id_workload_) {
         i.second.free();
     }
-    map_id_workload_.clear();
+    //map_id_workload_.clear();
     queue_mutex_.unlock();
 }
 

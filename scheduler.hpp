@@ -32,8 +32,7 @@ class Scheduler : public std::enable_shared_from_this<Scheduler> {
     int readjust_param();
 
     std::mutex queue_mutex_;
-    std::mutex thread_queue_mutex_;
-    std::mutex process_queue_mutex_;    
+    std::mutex cuda_mutex_;
     bool isTasksRunning_;
     std::atomic<bool> time_out_;
     boost::asio::io_service::strand queue_strand_;
