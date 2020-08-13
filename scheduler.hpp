@@ -19,7 +19,7 @@
 
 class Scheduler : public std::enable_shared_from_this<Scheduler> {
 
-    std::deque<int> workload_queue_;
+    std::vector<int> workload_queue_;
     std::vector<int> thread_mode_tasks_;
     std::vector<int> process_mode_tasks_;
 

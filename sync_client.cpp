@@ -283,6 +283,12 @@ public:
     }
 };
 
+void thread_helper(const std::string& host, const std::string& port, const std::string& json) {
+    boost::asio::io_context ioc;
+    std::make_shared<session>(ioc)->run(host, port, json);
+    ioc.run();
+}
+
 // Sends a WebSocket message and prints the response
 int main(int argc, char** argv)
 {
@@ -293,57 +299,44 @@ int main(int argc, char** argv)
     std::string host = argv[1];
     std::string port = argv[2];
 
-    std::string text = create_vectoradd_json(10000, 2000); // size_mean, size_delta
-
     std::random_device rd;
     std::mt19937 gen(rd());
     std::poisson_distribution<> poisson_dev(7);
 
-    size_t thread_size = poisson_dev(gen);
     std::vector<std::string> jsons;
 
-    boost::asio::io_context ioc;
-    std::cout << "Thread size is: " << thread_size << std::endl;
+   
     // Launch the asynchronous operation
     int total_invocation = 200;
+    for(int i = 0; i < total_invocation * 2; i++) {
+        jsons.emplace_back(create_vectoradd_json(10000, 2000));
+    }
+    int json_i = 0;
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-    for (int c = 0; c < thread_size; c++) {
-        const auto json = create_vectoradd_json(10000, 2000);
-        std::make_shared<session>(ioc)->run(host, port, json);
-
-        // Run the I/O service. The call will return when
-        // the socket is closed.
+    while (total_invocation > 0) {
+        int request_concur = poisson_dev(gen);
+        std::cout << "Batch number: " << request_concur << "\n";
+        const std::string & json = jsons[json_i++]; 
         std::vector<std::thread> vec_thread;
-        for (int c = 0; c < thread_size; c++) {
-            vec_thread.emplace_back([&ioc] { ioc.run(); });
+        for (int c = 0; c < request_concur; c++) {
+            vec_thread.emplace_back(std::bind(&thread_helper, std::cref(host), std::cref(port), std::cref(json)));
         }
-        for (int c = 0; c < thread_size; c++) {
+        for (int c = 0; c < request_concur; c++) {
             vec_thread[c].join();
         }
-
-        // for (int test_idx = 0; test_idx < 10; test_idx++) {
-        //     for(int c = 0; c < 1; c++)
-        //         jsons.emplace_back(create_vectoradd_json(20, 10));
-        //     std::cout << "issuing " << thread_size << " client concurrently.\n";
-
-        //     for (size_t i = 0; i < 1; i++) {
-        //         vec_thread.emplace_back(std::bind(&ws_thread, host, port, jsons[i]));
-        //     }
-        //     for (size_t i = 0; i < 1; i++) {
-        //         vec_thread[i].join();
-        //     }
-        //     jsons.clear();
-        //     sleep(0.5);
-        // }
-
-        // ws_thread(host, port, create_vectoradd_json(10000, 1000));
-
         
-
-        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-        double duration = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-
-        std::cout << "done" << std::endl;
+        total_invocation -= request_concur;
     }
+
+    total_invocation = 200 - total_invocation;
+
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+    double duration = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+    std::cout << "Total " << total_invocation << " requests" << std::endl;
+    std::cout << "Latency: " << duration / (double)total_invocation << " microsecond per requests\n";
+    std::cout << "Thruput: " << 
+        (double)total_invocation / std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() 
+              << " requests per second.\n";
+    std::cout << "done!" << std::endl;
 }

@@ -82,21 +82,16 @@ void Scheduler::async_run()
     // if threads_tasks dominates incoming requests, lower time_out. Otherwise, raise time_out_time;
     
     thread_mode_run();
-
-    queue_mutex_.lock();
-    thread_mode_tasks_.clear();
-    queue_mutex_.unlock();
-
     process_mode_run();
 
     queue_mutex_.lock();
+    thread_mode_tasks_.clear();
     process_mode_tasks_.clear();
-    queue_mutex_.unlock();
-
     for (auto& i : map_id_workload_) {
         i.second.free();
     }
     map_id_workload_.clear();
+    queue_mutex_.unlock();
 }
 
 bool Scheduler::judge_large(int wl_n)
