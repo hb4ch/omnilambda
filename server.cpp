@@ -70,9 +70,11 @@ void session::on_read(std::shared_ptr<Scheduler> s, boost::system::error_code ec
     //wl.output();
     if (success) {
         auto f = std::async(std::launch::async, [s, wl_ptr] {
-            s->async_insert_workload(wl_ptr);
+            s->insert_workload(wl_ptr);
         });
     }
+
+    s->ret();
 
     //s->join();
 
@@ -81,8 +83,6 @@ void session::on_read(std::shared_ptr<Scheduler> s, boost::system::error_code ec
     //     std::cout << boost::beast::buffers(read_buffer_.data()) << std::endl;
     // }
     // Echo the message
-
-    // Now queue the workload and block;
 
     ws_.text(ws_.got_text());
     std::string ret_json = "echo";
@@ -158,9 +158,16 @@ int main(int argc, char* argv[])
     // Run the I/O service on the requested number of threads
     std::vector<std::thread> sched_threads;
 
-    sched_threads.reserve(2);
+    sched_threads.reserve(1);
     sched_threads.emplace_back([&sched_ioc] { sched_ioc.run(); });
-    sched_threads.emplace_back([&sched_ioc] { sched_ioc.run(); });
+
+    // sched_threads.emplace_back([&sched_ioc] { sched_ioc.run(); });
+    
+    std::thread scheduler_thread {
+        [s] {
+            s->start();
+        }
+    };
 
     std::vector<std::thread> v;
     v.reserve(threads - 1);
@@ -168,5 +175,6 @@ int main(int argc, char* argv[])
         v.emplace_back([&ioc] { ioc.run(); });
     ioc.run();
 
+    scheduler_thread.join();
     return EXIT_SUCCESS;
 }

@@ -7,6 +7,8 @@
 #include <chrono>
 #include <memory>
 #include <map>
+#include <mutex>
+#include <condition_variable>
 #include <atomic>
 
 // std
@@ -32,10 +34,14 @@ class Scheduler : public std::enable_shared_from_this<Scheduler> {
     int queue_full_limit_;
     long largest_timeout_;
     // params;
-    int readjust_param();
+  
 
-    std::mutex queue_mutex_;
-    std::mutex cuda_mutex_;
+    std::condition_variable cv_run;
+    std::condition_variable cv_return;
+
+    std::mutex run_mutex_;
+    std::mutex ret_mutex_;
+
     bool isTasksRunning_;
     std::atomic<bool> time_out_;
     boost::asio::io_service::strand queue_strand_;
@@ -43,29 +49,30 @@ class Scheduler : public std::enable_shared_from_this<Scheduler> {
     boost::asio::deadline_timer timer_;
     uint64_t id_count_;
     std::atomic<bool> queueing_;
-
+    std::atomic<int> prev_queue_size_;
 
 public:
 
     Scheduler(boost::asio::io_context & sched_ioc)
-        : queue_full_limit_(24),
-          largest_timeout_(5000),
+        : queue_full_limit_(30),
+          largest_timeout_(10000),
           time_out_(false),
           queue_strand_(sched_ioc),
           timer_strand_(sched_ioc),
           timer_(sched_ioc),
           id_count_(0ULL),
-          queueing_(false)
+          queueing_(false),
+          prev_queue_size_(0)
     {
         std::cout << "Scheduler initiated.\n";
     }
     uint64_t get_id_count() {
         return id_count_;
     }
-    void start() {
-        std::cout << "Context running\n";
-    }
+    void start();
+    void ret();
     void async_insert_workload(std::shared_ptr<Workload>);
+    void insert_workload(std::shared_ptr<Workload>);
     void async_run();
     bool judge_large(std::shared_ptr<Workload>);
     void single_thread(std::shared_ptr<Workload>);

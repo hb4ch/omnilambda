@@ -1,7 +1,9 @@
 #include <algorithm>
 #include <chrono>
+#include <condition_variable>
 #include <deque>
 #include <map>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -26,42 +28,67 @@
 
 #define JITIFY_THREAD_SAFE 1
 
-void Scheduler::async_insert_workload(std::shared_ptr<Workload> wl_ptr)
+// This is threaded.
+
+void Scheduler::ret()
 {
-    // queue_mutex_.lock();
+    std::unique_lock<std::mutex> lock(ret_mutex_);
+    cv_return.wait(lock);
+    return;
+}
+
+void Scheduler::start()
+{
+    using namespace std::chrono_literals;
+    while (true) {
+        std::unique_lock<std::mutex> lock(run_mutex_);
+        cv_run.wait_for(lock, largest_timeout_ * 1us);
+        async_run();
+        cv_return.notify_all();
+    }
+}
+
+void Scheduler::insert_workload(std::shared_ptr<Workload> wl_ptr)
+{
     id_count_++;
     workload_queue_.push(wl_ptr);
-    std::cout << "Inserted workload.\n";
-    //map_id_workload_.emplace(wl_ptr->getid(), std::move(wl));
-    /// TODO
-    // queue_mutex_.unlock();
+    //std::cout << "Inserted workload.\n";
+
+    if (workload_queue_.size() >= (size_t)queue_full_limit_) {
+        std::cout << "Queue full...\n";
+        timer_.cancel();
+        cv_run.notify_all();
+        // std::thread t { std::bind(&Scheduler::async_run, this) };
+        // t.join();
+    }
+
     if (!queueing_) {
         std::cout << "largest_timeout_: " << largest_timeout_ << std::endl;
         timer_.expires_from_now(boost::posix_time::microseconds(largest_timeout_));
         queueing_ = true;
-        std::async(std::launch::async, [this] {
-            timer_.wait();
-            time_out_ = true;
-            queueing_ = false;
-            async_run();
-        });
-    }
-
-    if (workload_queue_.size() == (size_t)queue_full_limit_) {
-        std::cout << "Queue full...\n";
-        timer_.cancel();
-        std::async(std::launch::async, std::bind(&Scheduler::async_run, this));
     }
 }
 
 void Scheduler::async_run()
 {
+
+    if (workload_queue_.empty())
+        return;
     // Batch running...
     queueing_ = false;
 
     // queue_mutex_.lock();
 
     std::cout << "Batch running... " << workload_queue_.size() << std::endl;
+
+    // if(workload_queue_.size() > prev_queue_size_.load()) {
+    //     largest_timeout_ = std::min(40000L, long(1.4*largest_timeout_));
+    //     prev_queue_size_.store(workload_queue_.size());
+    // }
+    // else if(workload_queue_.size() < 0.4 * prev_queue_size_.load()) {
+    //     largest_timeout_ = std::min(5000L, long(0.7*largest_timeout_));
+    //     prev_queue_size_.store(workload_queue_.size());
+    // }
 
     while (!workload_queue_.empty()) {
         std::shared_ptr<Workload> front;
@@ -166,6 +193,11 @@ void Scheduler::single_thread(std::shared_ptr<Workload> wl_ptr)
                        .instantiate()
                        .configure(blocksPerGrid, threadsPerBlock)
                        .launch(cuda_pointers[0], cuda_pointers[1], cuda_pointers[2], cuda_result_pointers[0], number_arg));
+    } else if (wl_ptr->args_.size() == 1) {
+        CHECK_CUDA(program.kernel(wl_ptr->call_func_name_)
+                       .instantiate()
+                       .configure(blocksPerGrid, threadsPerBlock)
+                       .launch(cuda_pointers[0]));
     } else {
         std::cout << "Unsupported kernel" << std::endl;
     }
@@ -190,7 +222,7 @@ void Scheduler::process_mode_run()
     // queue_mutex_.unlock();
 
     if (n == 0) {
-        std::cout << "No process_mode tasks, returning...\n";
+        // std::cout << "No process_mode tasks, returning...\n";
         return;
     }
     std::cout << "process_mode_starting...\n";
@@ -238,14 +270,19 @@ void Scheduler::process_mode_run()
 
 void Scheduler::thread_mode_run()
 {
-    if (thread_mode_tasks_.size() == 0) {
-        std::cout << "No thread_mode tasks, returning...\n";
-        return;
-    }
+    // if (thread_mode_tasks_.size() == 0) {
+    //     std::cout << "No thread_mode tasks, returning...\n";
+    //     return;
+    // }
     std::cout << "thread_mode_starting...\n";
     int thread_num = thread_mode_tasks_.size();
+    //queue_mutex_.lock();
     std::cout << "thread_num = " << thread_num;
+    //queue_mutex_.unlock();
     std::vector<std::thread> cuda_threads;
+
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
     for (int thread_idx = 0; thread_idx < thread_num; thread_idx++) {
         cuda_threads.emplace_back([this, thread_idx]() {
             std::shared_ptr<Workload> wl_ptr = thread_mode_tasks_.at(thread_idx);
@@ -321,6 +358,11 @@ void Scheduler::thread_mode_run()
                                .instantiate()
                                .configure(blocksPerGrid, threadsPerBlock)
                                .launch(cuda_pointers[0], cuda_pointers[1], cuda_pointers[2], cuda_result_pointers[0], number_arg));
+            } else if (wl_ptr->args_.size() == 1) {
+                CHECK_CUDA(program.kernel(wl_ptr->call_func_name_)
+                               .instantiate()
+                               .configure(blocksPerGrid, threadsPerBlock)
+                               .launch(cuda_pointers[0]));
             } else {
                 std::cout << "Unsupported kernel" << std::endl;
             }
@@ -356,6 +398,7 @@ void Scheduler::thread_mode_run()
     for (auto& i : cuda_threads) {
         i.join();
     }
-
-    std::cout << "Thread mode running done.\n";
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+    double duration = std::chrono::duration_cast<std::chrono::seconds>(end - begin).count();
+    std::cout << "Thread mode run time: " << duration << " seconds\n";
 }
