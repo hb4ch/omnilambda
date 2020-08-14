@@ -81,14 +81,14 @@ void Scheduler::async_run()
 
     std::cout << "Batch running... " << workload_queue_.size() << std::endl;
 
-    // if(workload_queue_.size() > prev_queue_size_.load()) {
-    //     largest_timeout_ = std::min(40000L, long(1.4*largest_timeout_));
-    //     prev_queue_size_.store(workload_queue_.size());
-    // }
-    // else if(workload_queue_.size() < 0.4 * prev_queue_size_.load()) {
-    //     largest_timeout_ = std::min(5000L, long(0.7*largest_timeout_));
-    //     prev_queue_size_.store(workload_queue_.size());
-    // }
+    if(workload_queue_.size() > prev_queue_size_.load()) {
+        largest_timeout_ = std::min(40000L, long(1.4*largest_timeout_));
+        prev_queue_size_.store(workload_queue_.size());
+    }
+    else if(workload_queue_.size() < 0.4 * prev_queue_size_.load()) {
+        largest_timeout_ = std::min(5000L, long(0.7*largest_timeout_));
+        prev_queue_size_.store(workload_queue_.size());
+    }
 
     while (!workload_queue_.empty()) {
         std::shared_ptr<Workload> front;
@@ -100,17 +100,7 @@ void Scheduler::async_run()
     }
 
     // queue_mutex_.unlock();
-    //timer_.get_io_service().notify_fork(boost::asio::io_service::fork_prepare);
-    // if( process_mode_tasks_.size() == 0
-    //     || (double)thread_mode_tasks_.size() / (double)process_mode_tasks_.size() > 0.75f) {
-    //         long new_largest_timeout_ = long(double(largest_timeout_) * 0.7f);
-    //         largest_timeout_ = std::max(50L, new_largest_timeout_);
-    //     }
-    // else if(thread_mode_tasks_.size() == 0
-    //     || (double)process_mode_tasks_.size() / (double)thread_mode_tasks_.size() > 0.75f) {
-    //     long new_largest_timeout_ = long(double(largest_timeout_) * 1.3f);
-    //     largest_timeout_ = std::min(2000L, new_largest_timeout_);
-    // }
+    //timer_.get_io_service().notify_fork(boost::asio::io_service::fork_prepare)
     // if threads_tasks dominates incoming requests, lower time_out. Otherwise, raise time_out_time;
 
     thread_mode_run();

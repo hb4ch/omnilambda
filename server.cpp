@@ -76,14 +76,6 @@ void session::on_read(std::shared_ptr<Scheduler> s, boost::system::error_code ec
 
     s->ret();
 
-    //s->join();
-
-    // {
-    //     const std::lock_guard<std::mutex> lock(printlock);
-    //     std::cout << boost::beast::buffers(read_buffer_.data()) << std::endl;
-    // }
-    // Echo the message
-
     ws_.text(ws_.got_text());
     std::string ret_json = "echo";
 

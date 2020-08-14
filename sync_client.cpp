@@ -381,7 +381,11 @@ int main(int argc, char** argv)
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     while (total_invocation > 0) {
-        int request_concur = poisson_dev(gen);
+        
+        int request_concur;
+        if(lambda > 10) 
+            request_concur = poisson_dev(gen);
+        else request_concur = lambda;
         //int request_concur = lambda;
         std::cout << "Batch number: " << request_concur << "\n";
         const std::string& json = jsons[json_i++];
@@ -392,17 +396,15 @@ int main(int argc, char** argv)
         for (int c = 0; c < request_concur; c++) {
             vec_thread[c].join();
         }
-        sleep(1);
+        // sleep(1);
         total_invocation -= request_concur;
     }
 
     total_invocation = 200 - total_invocation;
 
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-    double duration = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() - double(total_invocation * 1);
+    double duration = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
     std::cout << "Total " << total_invocation << " requests" << std::endl;
     std::cout << "Latency: " << duration / (double)total_invocation << " microsecond per requests\n";
-    std::cout << "Thruput: " << (double)total_invocation / std::chrono::duration_cast<std::chrono::seconds>(end - begin).count() - double(total_invocation * 1)
-              << " requests per second.\n";
     std::cout << "done!" << std::endl;
 }
