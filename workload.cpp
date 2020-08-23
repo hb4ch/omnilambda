@@ -53,7 +53,7 @@ bool Workload::parse(const std::string& json_str)
     rapidjson::ParseResult ok = d.Parse(json_str.c_str());
     if (!ok) {
         std::cerr << "JSON parse error: " << std::endl;
-        std::cerr << json_str;
+        //std::cerr << json_str;
         return false;
     }
 

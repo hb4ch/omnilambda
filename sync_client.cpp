@@ -372,9 +372,9 @@ int main(int argc, char** argv)
     std::vector<std::string> jsons;
 
     // Launch the asynchronous operation
-    int total_invocation = 200;
+    int total_invocation = 400;
     for (int i = 0; i < total_invocation * 2; i++) {
-        jsons.emplace_back(create_vectoradd_json(100000, 2000));
+        jsons.emplace_back(create_vectoradd_json(size, size / 10));
         // jsons.emplace_back(create_dct8x8_json());
     }
     int json_i = 0;
@@ -400,7 +400,7 @@ int main(int argc, char** argv)
         total_invocation -= request_concur;
     }
 
-    total_invocation = 200 - total_invocation;
+    total_invocation = 400 - total_invocation;
 
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
     double duration = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();

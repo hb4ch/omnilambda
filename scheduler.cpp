@@ -121,11 +121,11 @@ void Scheduler::single_thread(std::shared_ptr<Workload> wl_ptr)
 {
     // std::cout << "In child now\n" << std::endl;
     // std::cout << "Running: \n" << wl.cuda_code_;
-    wl_ptr->output();
+    //wl_ptr->output();
 
     jitify::JitCache kernel_cache;
 
-    std::cout << wl_ptr->cuda_code_;
+    //std::cout << wl_ptr->cuda_code_;
     jitify::Program program = kernel_cache.program(wl_ptr->cuda_code_, 0);
 
     cudaError_t err = cudaSuccess;
@@ -279,7 +279,7 @@ void Scheduler::thread_mode_run()
             // std::cout << "Running: \n" << wl.cuda_code_;
             // wl_ptr->output();
 
-            jitify::JitCache kernel_cache;
+            static jitify::JitCache kernel_cache;
             jitify::Program program = kernel_cache.program(wl_ptr->cuda_code_, 0);
 
             cudaError_t err = cudaSuccess;
