@@ -11,6 +11,10 @@
 #include <boost/beast/core.hpp>
 #include <boost/beast/websocket.hpp>
 // boost
+
+#include "jitify/cuda_misc.hpp"
+#include "jitify/jitify.hpp"
+
 enum class Type {
     INT32,
     INT64,
@@ -58,7 +62,8 @@ public:
     }
     std::pair<int, int> get_conf()
     {
-        return { block_per_grid_, threads_per_block_ };
+        return { block_per_grid_.x * block_per_grid_.y * block_per_grid_.z, 
+                 threads_per_block_.x * threads_per_block_.x * threads_per_block_.z };
     }
     bool parse(const std::string& json_str);
     void output();
@@ -68,8 +73,10 @@ public:
     std::string cuda_code_;
     uint64_t id_;
 
-    int block_per_grid_;
-    int threads_per_block_;
+    
+    // int block_per_grid_;
+    dim3 block_per_grid_;
+    dim3 threads_per_block_;
 
     std::string call_func_name_;
 

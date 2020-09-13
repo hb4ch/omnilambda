@@ -198,9 +198,7 @@ int main(int argc, char** argv)
     if(argc != 4)
     {
         std::cerr <<
-            "Usage: omnilambd-client-async <host> <port> <workload_file>\n" <<
-            "Example:\n" <<
-            "    omnilambda-client-async echo.websocket.org 8080 \"Hello, world!\"\n";
+            "Usage: omnilambd-client-async <host> <port> <workload_file>\n";
         return EXIT_FAILURE;
     }
     auto const host = argv[1];

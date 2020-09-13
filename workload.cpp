@@ -58,8 +58,26 @@ bool Workload::parse(const std::string& json_str)
     }
 
     cuda_code_ = std::move(d["cuda_code"].GetString());
-    block_per_grid_ = d["block_per_grid"].GetInt();
-    threads_per_block_ = d["threads_per_block"].GetInt();
+
+    // block_per_grid_ = d["block_per_grid"].GetInt();
+    
+    int blockdim3[3];
+    int threaddim3[3];
+    int blockidx = 0;
+    int threadidx = 0;
+    const rapidjson::Value& block = d["block_per_grid"];
+    for(auto &v: block.GetArray())
+        blockdim3[blockidx++] = v.GetInt();
+
+    this->block_per_grid_ = dim3(blockdim3[0], blockdim3[1], blockdim3[2]);
+
+    const rapidjson::Value& threads = d["threads_per_block"];
+    for(auto &v: threads.GetArray())
+        threaddim3[threadidx++] = v.GetInt();
+
+    this->threads_per_block_ = dim3(threaddim3[0], threaddim3[1], threaddim3[2]);
+
+    // threads_per_block_ = d["threads_per_block"].GetInt();
     call_func_name_ = std::move(d["call"]["func_name"].GetString());
     const rapidjson::Value& call_args = d["call"]["args"];
     // const char* kTypeNames[] =
@@ -174,8 +192,8 @@ void Workload::output()
     std::cout << "cuda_code: \n"
               << cuda_code_;
     std::cout << "id: " << id_ << "\n";
-    std::cout << "block_per_grid: " << block_per_grid_ << "\n";
-    std::cout << "threads_per_block: " << threads_per_block_ << "\n";
+    std::cout << "block_per_grid: " << block_per_grid_.x << " " << block_per_grid_.y << " " << block_per_grid_.z << "\n";
+    std::cout << "threads_per_block: " << threads_per_block_.x << " " << threads_per_block_.y << " " << threads_per_block_.z << "\n";
     std::cout << "call_func_name: (" << call_func_name_ << ")\n";
     std::cout << "---------------------------------------------------------\n";
     std::cout << "Data part:\n";

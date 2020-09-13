@@ -95,14 +95,15 @@ void Scheduler::async_run()
         workload_queue_.wait_and_pop(front);
         if (judge_large(front)) {
             process_mode_tasks_.push_back(front);
-        } else
+        } else {
             thread_mode_tasks_.push_back(front);
+        }
     }
 
     // queue_mutex_.unlock();
     //timer_.get_io_service().notify_fork(boost::asio::io_service::fork_prepare)
     // if threads_tasks dominates incoming requests, lower time_out. Otherwise, raise time_out_time;
-
+    
     thread_mode_run();
     process_mode_run();
 
@@ -112,7 +113,7 @@ void Scheduler::async_run()
 
 bool Scheduler::judge_large(std::shared_ptr<Workload> wl_ptr)
 {
-    if ((uint64_t)wl_ptr->get_conf().first * (uint64_t)wl_ptr->get_conf().second >= 800000ULL)
+    if ((uint64_t)wl_ptr->get_conf().first * (uint64_t)wl_ptr->get_conf().second >= 1200000ULL)
         return true;
     return false;
 }
@@ -176,17 +177,17 @@ void Scheduler::single_thread(std::shared_ptr<Workload> wl_ptr)
         if (number_arg_exist)
             CHECK_CUDA(program.kernel(wl_ptr->call_func_name_)
                            .instantiate()
-                           .configure(blocksPerGrid, threadsPerBlock)
+                           .configure(wl_ptr->block_per_grid_, wl_ptr->threads_per_block_)
                            .launch(cuda_pointers[0], cuda_pointers[1], cuda_result_pointers[0], number_arg));
     } else if (wl_ptr->args_.size() == 5) {
         CHECK_CUDA(program.kernel(wl_ptr->call_func_name_)
                        .instantiate()
-                       .configure(blocksPerGrid, threadsPerBlock)
+                       .configure(wl_ptr->block_per_grid_, wl_ptr->threads_per_block_)
                        .launch(cuda_pointers[0], cuda_pointers[1], cuda_pointers[2], cuda_result_pointers[0], number_arg));
     } else if (wl_ptr->args_.size() == 1) {
         CHECK_CUDA(program.kernel(wl_ptr->call_func_name_)
                        .instantiate()
-                       .configure(blocksPerGrid, threadsPerBlock)
+                       .configure(wl_ptr->block_per_grid_, wl_ptr->threads_per_block_)
                        .launch(cuda_pointers[0]));
     } else {
         std::cout << "Unsupported kernel" << std::endl;
@@ -279,13 +280,13 @@ void Scheduler::thread_mode_run()
             // std::cout << "Running: \n" << wl.cuda_code_;
             // wl_ptr->output();
 
-            static jitify::JitCache kernel_cache;
+            jitify::JitCache kernel_cache;
             jitify::Program program = kernel_cache.program(wl_ptr->cuda_code_, 0);
 
             cudaError_t err = cudaSuccess;
 
-            dim3 threadsPerBlock(wl_ptr->threads_per_block_);
-            dim3 blocksPerGrid(wl_ptr->block_per_grid_);
+            // dim3 threadsPerBlock(wl_ptr->threads_per_block_);
+            // dim3 blocksPerGrid(wl_ptr->block_per_grid_);
 
             std::vector<void*> data_pointers;
             for (Data& i : wl_ptr->data_set) {
@@ -341,17 +342,17 @@ void Scheduler::thread_mode_run()
                 if (number_arg_exist)
                     CHECK_CUDA(program.kernel(wl_ptr->call_func_name_)
                                    .instantiate()
-                                   .configure(blocksPerGrid, threadsPerBlock)
+                                   .configure(wl_ptr->block_per_grid_, wl_ptr->threads_per_block_)
                                    .launch(cuda_pointers[0], cuda_pointers[1], cuda_result_pointers[0], number_arg));
             } else if (wl_ptr->args_.size() == 5) {
                 CHECK_CUDA(program.kernel(wl_ptr->call_func_name_)
                                .instantiate()
-                               .configure(blocksPerGrid, threadsPerBlock)
+                               .configure(wl_ptr->block_per_grid_, wl_ptr->threads_per_block_)
                                .launch(cuda_pointers[0], cuda_pointers[1], cuda_pointers[2], cuda_result_pointers[0], number_arg));
             } else if (wl_ptr->args_.size() == 1) {
                 CHECK_CUDA(program.kernel(wl_ptr->call_func_name_)
                                .instantiate()
-                               .configure(blocksPerGrid, threadsPerBlock)
+                               .configure(wl_ptr->block_per_grid_, wl_ptr->threads_per_block_)
                                .launch(cuda_pointers[0]));
             } else {
                 std::cout << "Unsupported kernel" << std::endl;
@@ -360,7 +361,7 @@ void Scheduler::thread_mode_run()
             for (size_t i = 0; i < wl_ptr->result_set.size(); i++) {
                 err = cudaMemcpy(wl_ptr->result_set[i].buffer, cuda_result_pointers[i], wl_ptr->result_set[i].size, cudaMemcpyDeviceToHost);
                 if (err) {
-                    std::cerr << "cudaMemcpy back error!\n";
+                    std::cerr << "cudaMemcpy back error! errno: " << err << "\n";
                 }
             }
 
@@ -370,7 +371,7 @@ void Scheduler::thread_mode_run()
                 }
                 err = cudaFree(p);
                 if (err) {
-                    std::cerr << "cudaMalloc error!\n";
+                    std::cerr << "cudaMalloc error! errno: "  << err << "\n";
                 }
             }
 
@@ -380,7 +381,7 @@ void Scheduler::thread_mode_run()
                 }
                 err = cudaFree(p);
                 if (err) {
-                    std::cerr << "cudaMalloc error!\n";
+                    std::cerr << "cudaFree error! errno: " << err << "\n";
                 }
             }
         });
