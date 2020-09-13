@@ -1,7 +1,7 @@
 {
     "cuda_code" : "matrixmul \n __global__ void MatrixMul(float *A, float *B, float *C, int w) {\n     int bx = blockIdx.x;\n     int by = blockIdx.y;\n     int tx = threadIdx.x;\n     int ty = threadIdx.y;\n     int aBegin = w * 32 * by;\n     int aEnd   = aBegin + w - 1;\n     int aStep  = 32;\n     int bBegin = 32 * bx;\n     int bStep  = 32 * w;\n     float Csub = 0;\n     for (int a = aBegin, b = bBegin;\n             a <= aEnd;\n             a += aStep, b += bStep) {\n         __shared__ float As[32][32];\n         __shared__ float Bs[32][32];\n \n         As[ty][tx] = A[a + w * ty + tx];\n         Bs[ty][tx] = B[b + w * ty + tx];\n \n         __syncthreads();\n #pragma unroll\n         for (int k = 0; k < 32; ++k) {\n             Csub += As[ty][k] * Bs[k][tx];\n         }\n         __syncthreads();\n     }\n     int c = w * 32 * by + 32 * bx;\n     C[c + w * ty + tx] = Csub;\n }\n ;",
-    "block_per_grid" : 4,
-    "threads_per_block" : 4,
+    "block_per_grid" : [4, 1, 1],
+    "threads_per_block" : [4, 1, 1],
     "data_1" : {
         "type" : "int",
         "dim_x" : 4,

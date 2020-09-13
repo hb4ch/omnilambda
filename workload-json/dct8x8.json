@@ -1,7 +1,7 @@
 {
     "cuda_code" : "....",
-    "block_per_grid" : 4096,
-    "threads_per_block" : 64,
+    "block_per_grid" : 5,
+    "threads_per_block" : 1024,
     "data_1" : {
         "type" : "int",
         "dim_x" : 4,
