@@ -1,0 +1,9 @@
+{
+    "cuda_code" : "binomial.cuh\n typedef double real;\n \n __device__ inline double expiryCallValue(double S, double X, double vDt, int i)\n {\n     double d = S * exp(vDt * (2.0 * i - 2048)) - X;\n     return (d > 0.0) ? d : 0.0;\n }\n \n extern \"C\" __global__ void binomialOptionsKernel()\n {\n     __shared__ real call_exchange[128 + 1];\n \n     const int     tid = threadIdx.x;\n     const real      S = 0.0;\n     const real      X = 0.0;\n     const real    vDt = 0.0;\n     const real puByDf = 0.0;\n     const real pdByDf = 0.0;\n \n     real call[16 + 1];\n     #pragma unroll\n     for (int i = 0; i < 16; ++i)\n         call[i] = expiryCallValue(S, X, vDt, tid * 16 + i);\n \n     if (tid == 0)\n         call_exchange[128] = expiryCallValue(S, X, vDt, 2048);\n \n     int final_it = max(0, tid * 16 - 1);\n \n     #pragma unroll 16\n     for (int i = 2048; i > 0; --i)\n     {\n         call_exchange[tid] = call[0];\n         __syncthreads();\n         call[16] = call_exchange[tid + 1];\n         __syncthreads();\n \n         if (i > final_it)\n         {\n            #pragma unroll\n            for(int j = 0; j < 16; ++j)\n               call[j] = puByDf * call[j + 1] + pdByDf * call[j];\n         }\n     }\n \n     if (tid == 0)\n     {\n         d_CallValue[blockIdx.x] = call[0];\n     }\n }\n ;",
+    "block_per_grid" : [1024, 1, 1],
+    "threads_per_block" : [128, 1, 1],
+    "call" : {
+        "func_name" : "MatrixMul", 
+        "args" : []
+    }
+}

@@ -189,6 +189,11 @@ void Scheduler::single_thread(std::shared_ptr<Workload> wl_ptr)
                        .instantiate()
                        .configure(wl_ptr->block_per_grid_, wl_ptr->threads_per_block_)
                        .launch(cuda_pointers[0]));
+    } else if (wl_ptr->args_.size() == 0) {
+        CHECK_CUDA(program.kernel(wl_ptr->call_func_name_)
+                       .instantiate()
+                       .configure(wl_ptr->block_per_grid_, wl_ptr->threads_per_block_)
+                       .launch());
     } else {
         std::cout << "Unsupported kernel" << std::endl;
     }
@@ -354,6 +359,11 @@ void Scheduler::thread_mode_run()
                                .instantiate()
                                .configure(wl_ptr->block_per_grid_, wl_ptr->threads_per_block_)
                                .launch(cuda_pointers[0]));
+            } else if (wl_ptr->args_.size() == 0) {
+                CHECK_CUDA(program.kernel(wl_ptr->call_func_name_)
+                        .instantiate()
+                        .configure(wl_ptr->block_per_grid_, wl_ptr->threads_per_block_)
+                        .launch());                  
             } else {
                 std::cout << "Unsupported kernel" << std::endl;
             }
