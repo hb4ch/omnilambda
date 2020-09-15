@@ -82,11 +82,11 @@ void Scheduler::async_run()
     std::cout << "Batch running... " << workload_queue_.size() << std::endl;
 
     if(workload_queue_.size() > prev_queue_size_.load()) {
-        largest_timeout_ = std::min(40000L, long(1.4*largest_timeout_));
+        largest_timeout_ = std::min(4000L, long(1.4*largest_timeout_));
         prev_queue_size_.store(workload_queue_.size());
     }
     else if(workload_queue_.size() < 0.4 * prev_queue_size_.load()) {
-        largest_timeout_ = std::min(5000L, long(0.7*largest_timeout_));
+        largest_timeout_ = std::min(4000L, long(0.7*largest_timeout_));
         prev_queue_size_.store(workload_queue_.size());
     }
 
@@ -113,7 +113,10 @@ void Scheduler::async_run()
 
 bool Scheduler::judge_large(std::shared_ptr<Workload> wl_ptr)
 {
-    if ((uint64_t)wl_ptr->get_conf().first * (uint64_t)wl_ptr->get_conf().second >= 1200000ULL)
+    long long product = (uint64_t)wl_ptr->get_conf().first * (uint64_t)wl_ptr->get_conf().second;
+    std::cout << "first = " << (uint64_t)wl_ptr->get_conf().first << " second = " << (uint64_t)wl_ptr->get_conf().second << "\n";  
+    std::cout << "Product = " << product << "\n";
+    if (product >= 1500000ULL)
         return true;
     return false;
 }
@@ -124,7 +127,7 @@ void Scheduler::single_thread(std::shared_ptr<Workload> wl_ptr)
     // std::cout << "Running: \n" << wl.cuda_code_;
     //wl_ptr->output();
 
-    jitify::JitCache kernel_cache;
+    static jitify::JitCache kernel_cache;
 
     //std::cout << wl_ptr->cuda_code_;
     jitify::Program program = kernel_cache.program(wl_ptr->cuda_code_, 0);
@@ -285,7 +288,7 @@ void Scheduler::thread_mode_run()
             // std::cout << "Running: \n" << wl.cuda_code_;
             // wl_ptr->output();
 
-            jitify::JitCache kernel_cache;
+            static jitify::JitCache kernel_cache;
             jitify::Program program = kernel_cache.program(wl_ptr->cuda_code_, 0);
 
             cudaError_t err = cudaSuccess;
