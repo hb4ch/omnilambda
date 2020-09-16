@@ -63,7 +63,7 @@ public:
     std::pair<int, int> get_conf()
     {
         return { block_per_grid_.x * block_per_grid_.y * block_per_grid_.z, 
-                 threads_per_block_.x * threads_per_block_.x * threads_per_block_.z };
+                 threads_per_block_.x * threads_per_block_.y * threads_per_block_.z };
     }
     bool parse(const std::string& json_str);
     void output();

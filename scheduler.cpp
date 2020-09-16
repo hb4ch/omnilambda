@@ -19,14 +19,15 @@
 #include <unistd.h>
 // posix
 
+#define JITIFY_THREAD_SAFE 1
+#define JITIFY_PRINT_ALL 1
+
 #include "jitify/cuda_misc.hpp"
 #include "jitify/jitify.hpp"
 // cuda
 
 #include "scheduler.hpp"
 #include "workload.hpp"
-
-#define JITIFY_THREAD_SAFE 1
 
 // This is threaded.
 
@@ -196,7 +197,7 @@ void Scheduler::single_thread(std::shared_ptr<Workload> wl_ptr)
         CHECK_CUDA(program.kernel(wl_ptr->call_func_name_)
                        .instantiate()
                        .configure(wl_ptr->block_per_grid_, wl_ptr->threads_per_block_)
-                       .launch());
+                       .launch(NULL));
     } else {
         std::cout << "Unsupported kernel" << std::endl;
     }
@@ -287,7 +288,9 @@ void Scheduler::thread_mode_run()
             std::shared_ptr<Workload> wl_ptr = thread_mode_tasks_.at(thread_idx);
             // std::cout << "Running: \n" << wl.cuda_code_;
             // wl_ptr->output();
-
+            cudaSetDevice(0);
+            // This to avoid subtle multithreading-bugs;
+            // see https://developer.nvidia.com/blog/cuda-pro-tip-always-set-current-device-avoid-multithreading-bugs/
             static jitify::JitCache kernel_cache;
             jitify::Program program = kernel_cache.program(wl_ptr->cuda_code_, 0);
 
@@ -366,7 +369,7 @@ void Scheduler::thread_mode_run()
                 CHECK_CUDA(program.kernel(wl_ptr->call_func_name_)
                         .instantiate()
                         .configure(wl_ptr->block_per_grid_, wl_ptr->threads_per_block_)
-                        .launch());                  
+                        .launch(NULL));                  
             } else {
                 std::cout << "Unsupported kernel" << std::endl;
             }
